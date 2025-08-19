@@ -98,25 +98,169 @@ cat encrypted.dat | dnca decrypt -k decryption.key
 4. **Audit Trail**: Tracking information included in decryption results
 5. **Forward Security**: Each decryption key is unique with timestamps
 
-## API Usage
+## Programmatic API Usage
+
+### Installation for Projects
+
+```bash
+npm install dnca
+```
+
+### Basic Usage
 
 ```javascript
 const DNCA3072 = require('dnca');
 
-const dnca = new DNCA3072();
+async function example() {
+    const dnca = new DNCA3072();
+    
+    // Generate keys
+    const masterKey = await dnca.generateMasterKey();
+    const encryptionKey = await dnca.generateEncryptionKey(masterKey);
+    const decryptionKey = await dnca.generateDecryptionKey(masterKey, encryptionKey);
+    
+    // Encrypt data
+    const encrypted = await dnca.encrypt("Hello World", encryptionKey);
+    
+    // Decrypt data
+    const result = await dnca.decrypt(encrypted, decryptionKey);
+    console.log(result.plaintext); // "Hello World"
+    console.log(result.trackingInfo); // Audit information
+}
 
-// Generate keys
+example();
+```
+
+### Complete API Reference
+
+#### Key Generation
+
+```javascript
+// Generate master key pair
 const masterKey = await dnca.generateMasterKey();
+// Returns: { private: BigInt, public: BigInt, type: 'master' }
+
+// Generate encryption key from master key
 const encryptionKey = await dnca.generateEncryptionKey(masterKey);
+// Returns: { key: BigInt, masterPublic: BigInt, type: 'encryption' }
+
+// Generate decryption key
 const decryptionKey = await dnca.generateDecryptionKey(masterKey, encryptionKey);
+// Returns: { key: BigInt, keyId: string, encryptionKeyHash: BigInt, masterPublic: BigInt, type: 'decryption' }
+```
 
-// Encrypt data
-const encrypted = await dnca.encrypt("Hello World", encryptionKey);
+#### Encryption
 
-// Decrypt data
-const result = await dnca.decrypt(encrypted, decryptionKey);
-console.log(result.plaintext); // "Hello World"
-console.log(result.trackingInfo); // Audit information
+```javascript
+// Encrypt with master key (can be decrypted by master key only)
+const masterEncrypted = await dnca.encrypt(plaintext, masterKey);
+
+// Encrypt with encryption key (can be decrypted by master or decryption keys)
+const encKeyEncrypted = await dnca.encrypt(plaintext, encryptionKey);
+
+// Both return JSON string with Base64-encoded data:
+// { ciphertext, iv, nonce, keyType, timestamp, authTag, publicKey }
+```
+
+#### Decryption
+
+```javascript
+// Decrypt with master key (can decrypt any data)
+const masterResult = await dnca.decryptWithMaster(encrypted, masterKey);
+
+// Decrypt with decryption key (only encryption-key encrypted data)
+const decResult = await dnca.decrypt(encrypted, decryptionKey);
+
+// Both return:
+// {
+//   plaintext: string,
+//   trackingInfo: {
+//     decryptedBy: string,
+//     decryptedAt: string,
+//     originalEncryption: { timestamp: string, keyType: string }
+//   }
+// }
+```
+
+#### Utility Functions
+
+```javascript
+// Generate secure random BigInt
+const randomValue = dnca.generateSecureRandom(256); // 256 bits
+
+// Hash data with SHA-256
+const hash = await dnca.customHash("data to hash");
+
+// Derive key from secret + salt + info
+const derivedKey = await dnca.deriveKey(secret, "salt", "INFO");
+
+// Modular exponentiation
+const result = dnca.modPow(base, exponent, modulus);
+```
+
+#### Error Handling
+
+```javascript
+try {
+    const result = await dnca.decrypt(tamperedData, decryptionKey);
+} catch (error) {
+    if (error.message.includes('Authentication failed')) {
+        console.log('Data has been tampered with');
+    } else if (error.message.includes('Cannot decrypt master-key-encrypted')) {
+        console.log('Wrong key type for this encrypted data');
+    }
+}
+```
+
+### Key Features for Developers
+
+- **TypeScript-ready**: BigInt support and proper types
+- **Memory-safe**: No key material stored in strings
+- **Base64 encoding**: Full alphanumeric character set
+- **Authentication**: Built-in tamper detection
+- **Audit trail**: Comprehensive tracking information
+- **Error handling**: Clear, actionable error messages
+
+### Example Project Integration
+
+```javascript
+// config.js
+const DNCA3072 = require('dnca');
+const fs = require('fs').promises;
+
+class SecureConfig {
+    constructor() {
+        this.dnca = new DNCA3072();
+    }
+    
+    async loadKeys() {
+        try {
+            const masterData = await fs.readFile('keys/master.key', 'utf8');
+            this.masterKey = JSON.parse(masterData, (key, value) => {
+                if (key === 'private' || key === 'public') {
+                    const bytes = Buffer.from(value, 'base64');
+                    return BigInt('0x' + bytes.toString('hex'));
+                }
+                return value;
+            });
+        } catch (error) {
+            console.log('Generating new master key...');
+            this.masterKey = await this.dnca.generateMasterKey();
+            await this.saveKey('keys/master.key', this.masterKey);
+        }
+    }
+    
+    async encryptSecret(data) {
+        return await this.dnca.encrypt(data, this.masterKey);
+    }
+    
+    async decryptSecret(encrypted) {
+        const result = await this.dnca.decryptWithMaster(encrypted, this.masterKey);
+        return result.plaintext;
+    }
+}
+
+module.exports = SecureConfig;
 ```
 
 ## Commands

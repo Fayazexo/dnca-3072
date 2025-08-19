@@ -7,7 +7,8 @@
 		"dnca": "./bin/dnca.js"
 	},
 	"scripts": {
-		"test": "node test/test.js",
+		"test": "node test/integration.js",
+		"example": "node example.js",
 		"start": "node bin/dnca.js"
 	},
 	"keywords": [

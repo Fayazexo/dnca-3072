@@ -187,7 +187,7 @@ program
       
       const keyData = await fs.readFile(options.key, 'utf8');
       const key = JSON.parse(keyData, (key, value) => {
-        if (key === 'private' || key === 'public' || key === 'key' || key === 'masterPublic' || key === 'encryptionKeyHash') {
+        if (key === 'private' || key === 'public' || key === 'key' || key === 'masterPublic' || key === 'encryptionKeyHash' || key === 'encryptionKey') {
           const bytes = Buffer.from(value, 'base64');
           return BigInt('0x' + bytes.toString('hex'));
         }

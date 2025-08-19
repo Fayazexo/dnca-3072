@@ -22,39 +22,54 @@ class DNCA3072 {
 	}
 
 	generateSecureRandom(bits = 256) {
+		const startTime = performance.now();
 		const bytes = bits / 8;
 		const array = new Uint8Array(bytes);
 		crypto.getRandomValues(array);
-		return BigInt(
+		const result = BigInt(
 			"0x" +
 				Array.from(array)
 					.map((b) => b.toString(16).padStart(2, "0"))
 					.join("")
 		);
+		const endTime = performance.now();
+		console.error(`Secure random generation (${bits} bits): ${(endTime - startTime).toFixed(3)}ms`);
+		return result;
 	}
 
 	async customHash(data) {
+		const startTime = performance.now();
 		const encoder = new TextEncoder();
 		const dataBuffer = encoder.encode(data);
 		const hashBuffer = await crypto.subtle.digest("SHA-256", dataBuffer);
 		const hashArray = new Uint8Array(hashBuffer);
-		return BigInt(
+		const result = BigInt(
 			"0x" +
 				Array.from(hashArray)
 					.map((b) => b.toString(16).padStart(2, "0"))
 					.join("")
 		);
+		const endTime = performance.now();
+		console.error(`SHA-256 hash: ${(endTime - startTime).toFixed(3)}ms`);
+		return result;
 	}
 
 	async deriveKey(secret, salt, info) {
+		const startTime = performance.now();
 		const combined = secret.toString(16) + salt + info;
 		const hash = await this.customHash(combined);
-		return (hash % (this.PRIME - BigInt(1))) + BigInt(1);
+		const result = (hash % (this.PRIME - BigInt(1))) + BigInt(1);
+		const endTime = performance.now();
+		console.error(`Key derivation: ${(endTime - startTime).toFixed(3)}ms`);
+		return result;
 	}
 
 	async generateMasterKey() {
+		const startTime = performance.now();
 		const privateKey = this.generateSecureRandom(256);
 		const publicKey = this.modPow(this.GENERATOR, privateKey, this.PRIME);
+		const endTime = performance.now();
+		console.error(`Master key generation: ${(endTime - startTime).toFixed(3)}ms`);
 
 		return {
 			private: privateKey,
@@ -64,6 +79,7 @@ class DNCA3072 {
 	}
 
 	async generateEncryptionKey(masterKey) {
+		const startTime = performance.now();
 		if (masterKey.type !== "master") {
 			throw new Error("Invalid master key");
 		}
@@ -73,6 +89,8 @@ class DNCA3072 {
 			"",
 			"ENCRYPT"
 		);
+		const endTime = performance.now();
+		console.error(`Encryption key generation: ${(endTime - startTime).toFixed(3)}ms`);
 		return {
 			key: encryptionKey,
 			masterPublic: masterKey.public,
@@ -81,6 +99,7 @@ class DNCA3072 {
 	}
 
 	async generateDecryptionKey(masterKey, encryptionKey) {
+		const startTime = performance.now();
 		if (masterKey.type !== "master" || encryptionKey.type !== "encryption") {
 			throw new Error("Invalid keys provided");
 		}
@@ -94,10 +113,13 @@ class DNCA3072 {
 			salt,
 			"DECRYPT"
 		);
+		const endTime = performance.now();
+		console.error(`Decryption key generation: ${(endTime - startTime).toFixed(3)}ms`);
 
 		return {
 			key: decryptionSecret,
 			keyId: keyId,
+			encryptionKey: encryptionKey.key,
 			encryptionKeyHash: await this.customHash(encryptionKey.key.toString()),
 			masterPublic: masterKey.public,
 			type: "decryption",
@@ -105,6 +127,7 @@ class DNCA3072 {
 	}
 
 	modPow(base, exponent, modulus) {
+		const startTime = performance.now();
 		let result = BigInt(1);
 		base = base % modulus;
 
@@ -115,7 +138,8 @@ class DNCA3072 {
 			exponent = exponent >> BigInt(1);
 			base = (base * base) % modulus;
 		}
-
+		const endTime = performance.now();
+		console.error(`Modular exponentiation: ${(endTime - startTime).toFixed(3)}ms`);
 		return result;
 	}
 
@@ -172,6 +196,7 @@ class DNCA3072 {
 	}
 
 	async encrypt(plaintext, key) {
+		const startTime = performance.now();
 		const nonce = this.generateSecureRandom(128);
 		const timestamp = BigInt(Date.now());
 
@@ -195,32 +220,67 @@ class DNCA3072 {
 
 		const authData = Buffer.concat([
 			Buffer.from(encrypted.ciphertext),
-			Buffer.from(nonce.toString(16).padStart(32, '0').match(/.{2}/g).map(byte => parseInt(byte, 16))),
+			Buffer.from(
+				nonce
+					.toString(16)
+					.padStart(32, "0")
+					.match(/.{2}/g)
+					.map((byte) => parseInt(byte, 16))
+			),
 			Buffer.from(keyTypeFlag),
-			Buffer.from(timestamp.toString(16).padStart(16, '0').match(/.{2}/g).map(byte => parseInt(byte, 16)))
-		]).toString('hex');
+			Buffer.from(
+				timestamp
+					.toString(16)
+					.padStart(16, "0")
+					.match(/.{2}/g)
+					.map((byte) => parseInt(byte, 16))
+			),
+		]).toString("hex");
 		const authTag = await this.customHash(
 			authData + encryptionKey.toString(16)
 		);
 
 		const result = {
-			ciphertext: Buffer.from(encrypted.ciphertext).toString('base64'),
-			iv: Buffer.from(encrypted.iv).toString('base64'),
-			nonce: Buffer.from(nonce.toString(16).padStart(32, '0').match(/.{2}/g).map(byte => parseInt(byte, 16))).toString('base64'),
+			ciphertext: Buffer.from(encrypted.ciphertext).toString("base64"),
+			iv: Buffer.from(encrypted.iv).toString("base64"),
+			nonce: Buffer.from(
+				nonce
+					.toString(16)
+					.padStart(32, "0")
+					.match(/.{2}/g)
+					.map((byte) => parseInt(byte, 16))
+			).toString("base64"),
 			keyType: keyTypeFlag,
-			timestamp: Buffer.from(timestamp.toString(16).padStart(16, '0').match(/.{2}/g).map(byte => parseInt(byte, 16))).toString('base64'),
-			authTag: Buffer.from(authTag.toString(16).padStart(64, '0').match(/.{2}/g).map(byte => parseInt(byte, 16))).toString('base64'),
+			timestamp: Buffer.from(
+				timestamp
+					.toString(16)
+					.padStart(16, "0")
+					.match(/.{2}/g)
+					.map((byte) => parseInt(byte, 16))
+			).toString("base64"),
+			authTag: Buffer.from(
+				authTag
+					.toString(16)
+					.padStart(64, "0")
+					.match(/.{2}/g)
+					.map((byte) => parseInt(byte, 16))
+			).toString("base64"),
 			publicKey: Buffer.from(
 				(key.type === "master" ? key.public : key.masterPublic)
-					.toString(16).padStart(768, '0').match(/.{2}/g).map(byte => parseInt(byte, 16))
-			).toString('base64'),
+					.toString(16)
+					.padStart(768, "0")
+					.match(/.{2}/g)
+					.map((byte) => parseInt(byte, 16))
+			).toString("base64"),
 		};
 
+		const endTime = performance.now();
+		console.error(`Encryption: ${(endTime - startTime).toFixed(3)}ms`);
 		return JSON.stringify(result);
 	}
 
 	async decrypt(encryptedData, decryptionKey) {
-		const time = performance.now();
+		const startTime = performance.now();
 		if (decryptionKey.type !== "decryption") {
 			throw new Error("Invalid decryption key");
 		}
@@ -237,21 +297,29 @@ class DNCA3072 {
 			decryptionKey
 		);
 
-		const ciphertextBytes = Buffer.from(data.ciphertext, 'base64');
-		const nonceBytes = Buffer.from(data.nonce, 'base64');
-		const timestampBytes = Buffer.from(data.timestamp, 'base64');
-		const authData = Buffer.concat([ciphertextBytes, nonceBytes, Buffer.from(data.keyType), timestampBytes]).toString('hex');
+		const ciphertextBytes = Buffer.from(data.ciphertext, "base64");
+		const nonceBytes = Buffer.from(data.nonce, "base64");
+		const timestampBytes = Buffer.from(data.timestamp, "base64");
+		const authData = Buffer.concat([
+			ciphertextBytes,
+			nonceBytes,
+			Buffer.from(data.keyType),
+			timestampBytes,
+		]).toString("hex");
 		const expectedAuthTag = await this.customHash(
 			authData + originalEncKey.toString(16)
 		);
 
-		if (expectedAuthTag.toString(16) !== Buffer.from(data.authTag, 'base64').toString('hex')) {
+		if (
+			expectedAuthTag.toString(16) !==
+			Buffer.from(data.authTag, "base64").toString("hex")
+		) {
 			throw new Error("Authentication failed - data may be tampered");
 		}
 
-		const nonce = BigInt('0x' + nonceBytes.toString('hex'));
+		const nonce = BigInt("0x" + nonceBytes.toString("hex"));
 		const ciphertext = new Uint8Array(ciphertextBytes);
-		const iv = new Uint8Array(Buffer.from(data.iv, 'base64'));
+		const iv = new Uint8Array(Buffer.from(data.iv, "base64"));
 		const plaintext = await this.decryptWithAES(
 			ciphertext,
 			originalEncKey,
@@ -259,8 +327,8 @@ class DNCA3072 {
 			iv
 		);
 
-		console.log("Decryption Time:", performance.now() - time, "ms");
-
+		const endTime = performance.now();
+		console.error(`Decryption (with decryption key): ${(endTime - startTime).toFixed(3)}ms`);
 		return {
 			plaintext: plaintext,
 			trackingInfo: {
@@ -275,13 +343,12 @@ class DNCA3072 {
 	}
 
 	async decryptWithMaster(encryptedData, masterKey) {
-		const time = performance.now();
+		const startTime = performance.now();
 		if (masterKey.type !== "master") {
 			throw new Error("Invalid master key");
 		}
 
 		const data = JSON.parse(encryptedData);
-
 
 		let decryptionKey;
 		if (data.keyType === "1") {
@@ -290,29 +357,38 @@ class DNCA3072 {
 			decryptionKey = await this.deriveKey(masterKey.private, "", "ENCRYPT");
 		}
 
-		const ciphertextBytes = Buffer.from(data.ciphertext, 'base64');
-		const nonceBytes = Buffer.from(data.nonce, 'base64');
-		const timestampBytes = Buffer.from(data.timestamp, 'base64');
-		const authData = Buffer.concat([ciphertextBytes, nonceBytes, Buffer.from(data.keyType), timestampBytes]).toString('hex');
+		const ciphertextBytes = Buffer.from(data.ciphertext, "base64");
+		const nonceBytes = Buffer.from(data.nonce, "base64");
+		const timestampBytes = Buffer.from(data.timestamp, "base64");
+		const authData = Buffer.concat([
+			ciphertextBytes,
+			nonceBytes,
+			Buffer.from(data.keyType),
+			timestampBytes,
+		]).toString("hex");
 		const expectedAuthTag = await this.customHash(
 			authData + decryptionKey.toString(16)
 		);
 
-		if (expectedAuthTag.toString(16) !== Buffer.from(data.authTag, 'base64').toString('hex')) {
+		if (
+			expectedAuthTag.toString(16) !==
+			Buffer.from(data.authTag, "base64").toString("hex")
+		) {
 			throw new Error("Authentication failed - data may be tampered");
 		}
 
-		const nonce = BigInt('0x' + nonceBytes.toString('hex'));
+		const nonce = BigInt("0x" + nonceBytes.toString("hex"));
 		const ciphertext = new Uint8Array(ciphertextBytes);
-		const iv = new Uint8Array(Buffer.from(data.iv, 'base64'));
+		const iv = new Uint8Array(Buffer.from(data.iv, "base64"));
 		const plaintext = await this.decryptWithAES(
 			ciphertext,
 			decryptionKey,
 			nonce,
 			iv
 		);
-		console.log("Decryption Time:", performance.now() - time, "ms");
 
+		const endTime = performance.now();
+		console.error(`Decryption (with master key): ${(endTime - startTime).toFixed(3)}ms`);
 		return {
 			plaintext: plaintext,
 			trackingInfo: {
@@ -327,15 +403,8 @@ class DNCA3072 {
 	}
 
 	async deriveOriginalEncryptionKey(decryptionKey) {
-		const masterKeyHash = await this.customHash(
-			decryptionKey.encryptionKeyHash.toString()
-		);
-		const reconstructedKey = await this.deriveKey(
-			masterKeyHash,
-			decryptionKey.keyId,
-			"ENCRYPT"
-		);
-		return reconstructedKey;
+		// Return the stored encryption key from the decryption key
+		return decryptionKey.encryptionKey;
 	}
 }
 
