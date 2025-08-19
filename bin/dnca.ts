@@ -1,12 +1,42 @@
-#!/usr/bin/env node
+#!/usr/bin/env ts-node
 
-const { Command } = require('commander');
-const chalk = require('chalk');
-const fs = require('fs').promises;
-const path = require('path');
-const DNCA3072 = require('../src/dnca');
+import { Command } from 'commander';
+import chalk from 'chalk';
+import { promises as fs } from 'fs';
+import DNCA3072, { MasterKey, EncryptionKey, DecryptionKey, DNCAKey } from '../src/dnca';
 
 const program = new Command();
+
+// Helper function to serialize BigInt values to Base64
+function serializeBigInt(key: string, value: any): any {
+  if (typeof value === 'bigint') {
+    const hex = value.toString(16).padStart(768, '0');
+    const bytes = hex.match(/.{2}/g)!.map(byte => parseInt(byte, 16));
+    return Buffer.from(bytes).toString('base64');
+  }
+  return value;
+}
+
+// Helper function to deserialize Base64 values to BigInt
+function deserializeBigInt(key: string, value: any): any {
+  if (key === 'private' || key === 'public' || key === 'key' || key === 'masterPublic' || key === 'encryptionKeyHash' || key === 'encryptionKey') {
+    const bytes = Buffer.from(value, 'base64');
+    return BigInt('0x' + bytes.toString('hex'));
+  }
+  return value;
+}
+
+// Helper function to save key to file
+async function saveKeyToFile(filePath: string, keyObject: any): Promise<void> {
+  const serialized = JSON.stringify(keyObject, serializeBigInt, 2);
+  await fs.writeFile(filePath, serialized);
+}
+
+// Helper function to load key from file
+async function loadKeyFromFile<T extends DNCAKey>(filePath: string): Promise<T> {
+  const keyData = await fs.readFile(filePath, 'utf8');
+  return JSON.parse(keyData, deserializeBigInt) as T;
+}
 
 program
   .name('dnca')
@@ -18,25 +48,18 @@ program
   .command('keygen')
   .description('Generate a new master key pair')
   .option('-o, --output <file>', 'Output file for the master key', 'master.key')
-  .action(async (options) => {
+  .action(async (options: { output: string }) => {
     try {
       const dnca = new DNCA3072();
       const masterKey = await dnca.generateMasterKey();
       
-      await fs.writeFile(options.output, JSON.stringify(masterKey, (key, value) => {
-        if (typeof value === 'bigint') {
-          const hex = value.toString(16).padStart(768, '0');
-          const bytes = hex.match(/.{2}/g).map(byte => parseInt(byte, 16));
-          return Buffer.from(bytes).toString('base64');
-        }
-        return value;
-      }, 2));
+      await saveKeyToFile(options.output, masterKey);
       
       console.log(chalk.green('Master key generated successfully!'));
       console.log(chalk.blue(`Saved to: ${options.output}`));
       console.log(chalk.yellow('Keep this file secure - it contains your private key!'));
     } catch (error) {
-      console.error(chalk.red('Error generating master key:'), error.message);
+      console.error(chalk.red('Error generating master key:'), (error as Error).message);
       process.exit(1);
     }
   });
@@ -47,33 +70,19 @@ program
   .description('Generate an encryption key from master key')
   .requiredOption('-m, --master <file>', 'Master key file')
   .option('-o, --output <file>', 'Output file for encryption key', 'encryption.key')
-  .action(async (options) => {
+  .action(async (options: { master: string; output: string }) => {
     try {
       const dnca = new DNCA3072();
-      const masterKeyData = await fs.readFile(options.master, 'utf8');
-      const masterKey = JSON.parse(masterKeyData, (key, value) => {
-        if (key === 'private' || key === 'public') {
-          const bytes = Buffer.from(value, 'base64');
-          return BigInt('0x' + bytes.toString('hex'));
-        }
-        return value;
-      });
+      const masterKey = await loadKeyFromFile<MasterKey>(options.master);
       
       const encryptionKey = await dnca.generateEncryptionKey(masterKey);
       
-      await fs.writeFile(options.output, JSON.stringify(encryptionKey, (key, value) => {
-        if (typeof value === 'bigint') {
-          const hex = value.toString(16).padStart(768, '0');
-          const bytes = hex.match(/.{2}/g).map(byte => parseInt(byte, 16));
-          return Buffer.from(bytes).toString('base64');
-        }
-        return value;
-      }, 2));
+      await saveKeyToFile(options.output, encryptionKey);
       
       console.log(chalk.green('Encryption key generated successfully!'));
       console.log(chalk.blue(`Saved to: ${options.output}`));
     } catch (error) {
-      console.error(chalk.red('Error generating encryption key:'), error.message);
+      console.error(chalk.red('Error generating encryption key:'), (error as Error).message);
       process.exit(1);
     }
   });
@@ -85,44 +94,33 @@ program
   .requiredOption('-m, --master <file>', 'Master key file')
   .requiredOption('-e, --encryption <file>', 'Encryption key file')
   .option('-o, --output <file>', 'Output file for decryption key', 'decryption.key')
-  .action(async (options) => {
+  .action(async (options: { master: string; encryption: string; output: string }) => {
     try {
       const dnca = new DNCA3072();
       
-      const masterKeyData = await fs.readFile(options.master, 'utf8');
-      const masterKey = JSON.parse(masterKeyData, (key, value) => {
-        if (key === 'private' || key === 'public') {
-          const bytes = Buffer.from(value, 'base64');
-          return BigInt('0x' + bytes.toString('hex'));
-        }
-        return value;
-      });
-      
-      const encKeyData = await fs.readFile(options.encryption, 'utf8');
-      const encryptionKey = JSON.parse(encKeyData, (key, value) => {
-        if (key === 'key' || key === 'masterPublic') {
-          const bytes = Buffer.from(value, 'base64');
-          return BigInt('0x' + bytes.toString('hex'));
-        }
-        return value;
-      });
+      const masterKey = await loadKeyFromFile<MasterKey>(options.master);
+      const encryptionKey = await loadKeyFromFile<EncryptionKey>(options.encryption);
       
       const decryptionKey = await dnca.generateDecryptionKey(masterKey, encryptionKey);
       
-      await fs.writeFile(options.output, JSON.stringify(decryptionKey, (key, value) => {
+      // Special serialization for decryption key (encryptionKeyHash needs different padding)
+      const serialized = JSON.stringify(decryptionKey, (key, value) => {
         if (typeof value === 'bigint') {
-          const hex = value.toString(16).padStart(64, '0');
-          const bytes = hex.match(/.{2}/g).map(byte => parseInt(byte, 16));
+          const padding = key === 'encryptionKeyHash' ? 64 : 768;
+          const hex = value.toString(16).padStart(padding, '0');
+          const bytes = hex.match(/.{2}/g)!.map(byte => parseInt(byte, 16));
           return Buffer.from(bytes).toString('base64');
         }
         return value;
-      }, 2));
+      }, 2);
+      
+      await fs.writeFile(options.output, serialized);
       
       console.log(chalk.green('Decryption key generated successfully!'));
       console.log(chalk.blue(`Saved to: ${options.output}`));
       console.log(chalk.cyan(`Key ID: ${decryptionKey.keyId}`));
     } catch (error) {
-      console.error(chalk.red('Error generating decryption key:'), error.message);
+      console.error(chalk.red('Error generating decryption key:'), (error as Error).message);
       process.exit(1);
     }
   });
@@ -134,27 +132,20 @@ program
   .requiredOption('-k, --key <file>', 'Key file (master or encryption key)')
   .option('-i, --input <file>', 'Input file (if not provided, reads from stdin)')
   .option('-o, --output <file>', 'Output file (if not provided, writes to stdout)')
-  .action(async (options) => {
+  .action(async (options: { key: string; input?: string; output?: string }) => {
     try {
       const dnca = new DNCA3072();
       
-      const keyData = await fs.readFile(options.key, 'utf8');
-      const key = JSON.parse(keyData, (key, value) => {
-        if (key === 'private' || key === 'public' || key === 'key' || key === 'masterPublic') {
-          const bytes = Buffer.from(value, 'base64');
-          return BigInt('0x' + bytes.toString('hex'));
-        }
-        return value;
-      });
+      const key = await loadKeyFromFile<MasterKey | EncryptionKey>(options.key);
       
-      let plaintext;
+      let plaintext: string;
       if (options.input) {
         plaintext = await fs.readFile(options.input, 'utf8');
       } else {
         // Read from stdin
-        plaintext = await new Promise((resolve) => {
+        plaintext = await new Promise<string>((resolve) => {
           let data = '';
-          process.stdin.on('data', chunk => data += chunk);
+          process.stdin.on('data', (chunk: Buffer) => data += chunk.toString());
           process.stdin.on('end', () => resolve(data));
         });
       }
@@ -169,7 +160,7 @@ program
         console.log(encrypted);
       }
     } catch (error) {
-      console.error(chalk.red('Error encrypting data:'), error.message);
+      console.error(chalk.red('Error encrypting data:'), (error as Error).message);
       process.exit(1);
     }
   });
@@ -181,36 +172,29 @@ program
   .requiredOption('-k, --key <file>', 'Key file (master or decryption key)')
   .option('-i, --input <file>', 'Input file (if not provided, reads from stdin)')
   .option('-o, --output <file>', 'Output file (if not provided, writes to stdout)')
-  .action(async (options) => {
+  .action(async (options: { key: string; input?: string; output?: string }) => {
     try {
       const dnca = new DNCA3072();
       
-      const keyData = await fs.readFile(options.key, 'utf8');
-      const key = JSON.parse(keyData, (key, value) => {
-        if (key === 'private' || key === 'public' || key === 'key' || key === 'masterPublic' || key === 'encryptionKeyHash' || key === 'encryptionKey') {
-          const bytes = Buffer.from(value, 'base64');
-          return BigInt('0x' + bytes.toString('hex'));
-        }
-        return value;
-      });
+      const key = await loadKeyFromFile<MasterKey | DecryptionKey>(options.key);
       
-      let encryptedData;
+      let encryptedData: string;
       if (options.input) {
         encryptedData = await fs.readFile(options.input, 'utf8');
       } else {
         // Read from stdin
-        encryptedData = await new Promise((resolve) => {
+        encryptedData = await new Promise<string>((resolve) => {
           let data = '';
-          process.stdin.on('data', chunk => data += chunk);
+          process.stdin.on('data', (chunk: Buffer) => data += chunk.toString());
           process.stdin.on('end', () => resolve(data));
         });
       }
       
       let result;
       if (key.type === 'master') {
-        result = await dnca.decryptWithMaster(encryptedData, key);
+        result = await dnca.decryptWithMaster(encryptedData, key as MasterKey);
       } else if (key.type === 'decryption') {
-        result = await dnca.decrypt(encryptedData, key);
+        result = await dnca.decrypt(encryptedData, key as DecryptionKey);
       } else {
         throw new Error('Invalid key type for decryption');
       }
@@ -224,7 +208,7 @@ program
         console.log(result.plaintext);
       }
     } catch (error) {
-      console.error(chalk.red('Error decrypting data:'), error.message);
+      console.error(chalk.red('Error decrypting data:'), (error as Error).message);
       process.exit(1);
     }
   });

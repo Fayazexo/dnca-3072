@@ -1,6 +1,6 @@
-const DNCA3072 = require('./src/dnca');
+import DNCA3072, { MasterKey, EncryptionKey, DecryptionKey } from './src/dnca';
 
-async function demonstrateAPI() {
+async function demonstrateAPI(): Promise<void> {
     console.log('🔐 DNCA3072 API Demonstration\n');
     
     // Initialize DNCA3072 instance
@@ -9,7 +9,7 @@ async function demonstrateAPI() {
     try {
         // 1. Generate Master Key
         console.log('1️⃣ Generating Master Key...');
-        const masterKey = await dnca.generateMasterKey();
+        const masterKey: MasterKey = await dnca.generateMasterKey();
         console.log('✅ Master key generated');
         console.log('   Type:', masterKey.type);
         console.log('   Has private key:', typeof masterKey.private === 'bigint');
@@ -18,7 +18,7 @@ async function demonstrateAPI() {
         
         // 2. Generate Encryption Key
         console.log('2️⃣ Generating Encryption Key...');
-        const encryptionKey = await dnca.generateEncryptionKey(masterKey);
+        const encryptionKey: EncryptionKey = await dnca.generateEncryptionKey(masterKey);
         console.log('✅ Encryption key generated');
         console.log('   Type:', encryptionKey.type);
         console.log('   Key length:', encryptionKey.key.toString(16).length, 'hex chars');
@@ -26,7 +26,7 @@ async function demonstrateAPI() {
         
         // 3. Generate Decryption Key
         console.log('3️⃣ Generating Decryption Key...');
-        const decryptionKey = await dnca.generateDecryptionKey(masterKey, encryptionKey);
+        const decryptionKey: DecryptionKey = await dnca.generateDecryptionKey(masterKey, encryptionKey);
         console.log('✅ Decryption key generated');
         console.log('   Type:', decryptionKey.type);
         console.log('   Key ID:', decryptionKey.keyId);
@@ -35,7 +35,7 @@ async function demonstrateAPI() {
         // 4. Encrypt with Master Key
         const testMessage = 'Hello DNCA3072! This is a test message with special chars: @#$%^&*()_+{}[]|;:,.<>?';
         console.log('4️⃣ Encrypting with Master Key...');
-        const masterEncrypted = await dnca.encrypt(testMessage, masterKey);
+        const masterEncrypted: string = await dnca.encrypt(testMessage, masterKey);
         console.log('✅ Encrypted with master key');
         const masterData = JSON.parse(masterEncrypted);
         console.log('   Ciphertext length:', masterData.ciphertext.length);
@@ -44,7 +44,7 @@ async function demonstrateAPI() {
         
         // 5. Encrypt with Encryption Key
         console.log('5️⃣ Encrypting with Encryption Key...');
-        const encKeyEncrypted = await dnca.encrypt(testMessage, encryptionKey);
+        const encKeyEncrypted: string = await dnca.encrypt(testMessage, encryptionKey);
         console.log('✅ Encrypted with encryption key');
         const encData = JSON.parse(encKeyEncrypted);
         console.log('   Ciphertext length:', encData.ciphertext.length);
@@ -67,7 +67,7 @@ async function demonstrateAPI() {
             await dnca.decrypt(masterEncrypted, decryptionKey);
             console.log('❌ Should not be able to decrypt master-encrypted data');
         } catch (error) {
-            console.log('✅ Correctly blocked master-encrypted data:', error.message.substring(0, 50) + '...');
+            console.log('✅ Correctly blocked master-encrypted data:', (error as Error).message.substring(0, 50) + '...');
         }
         
         const decKeyDecrypted = await dnca.decrypt(encKeyEncrypted, decryptionKey);
@@ -77,22 +77,22 @@ async function demonstrateAPI() {
         
         // 8. Key Derivation Functions
         console.log('8️⃣ Testing Key Derivation...');
-        const derived1 = await dnca.deriveKey(masterKey.private, 'salt123', 'TEST');
-        const derived2 = await dnca.deriveKey(masterKey.private, 'salt123', 'TEST');
-        const derived3 = await dnca.deriveKey(masterKey.private, 'salt456', 'TEST');
+        const derived1: bigint = await dnca.deriveKey(masterKey.private, 'salt123', 'TEST');
+        const derived2: bigint = await dnca.deriveKey(masterKey.private, 'salt123', 'TEST');
+        const derived3: bigint = await dnca.deriveKey(masterKey.private, 'salt456', 'TEST');
         console.log('✅ Key derivation deterministic:', derived1 === derived2 ? '✅' : '❌');
         console.log('✅ Different salt produces different key:', derived1 !== derived3 ? '✅' : '❌');
         console.log();
         
         // 9. Cryptographic Primitives
         console.log('9️⃣ Testing Cryptographic Primitives...');
-        const random1 = dnca.generateSecureRandom(256);
-        const random2 = dnca.generateSecureRandom(256);
+        const random1: bigint = dnca.generateSecureRandom(256);
+        const random2: bigint = dnca.generateSecureRandom(256);
         console.log('✅ Secure random generates different values:', random1 !== random2 ? '✅' : '❌');
         
-        const hash1 = await dnca.customHash('test data');
-        const hash2 = await dnca.customHash('test data');
-        const hash3 = await dnca.customHash('different data');
+        const hash1: bigint = await dnca.customHash('test data');
+        const hash2: bigint = await dnca.customHash('test data');
+        const hash3: bigint = await dnca.customHash('different data');
         console.log('✅ Hash function deterministic:', hash1 === hash2 ? '✅' : '❌');
         console.log('✅ Different inputs produce different hashes:', hash1 !== hash3 ? '✅' : '❌');
         console.log();
@@ -100,17 +100,17 @@ async function demonstrateAPI() {
         // 10. Error Handling
         console.log('🔟 Testing Error Handling...');
         try {
-            await dnca.generateEncryptionKey({ type: 'invalid' });
+            await dnca.generateEncryptionKey({ type: 'invalid' } as any);
             console.log('❌ Should throw error for invalid master key');
         } catch (error) {
-            console.log('✅ Throws error for invalid master key:', error.message.substring(0, 30) + '...');
+            console.log('✅ Throws error for invalid master key:', (error as Error).message.substring(0, 30) + '...');
         }
         
         try {
-            await dnca.encrypt(testMessage, { type: 'invalid' });
+            await dnca.encrypt(testMessage, { type: 'invalid' } as any);
             console.log('❌ Should throw error for invalid key type');
         } catch (error) {
-            console.log('✅ Throws error for invalid key type:', error.message.substring(0, 30) + '...');
+            console.log('✅ Throws error for invalid key type:', (error as Error).message.substring(0, 30) + '...');
         }
         
         console.log('\n🎉 All DNCA3072 API features demonstrated successfully!');

@@ -106,7 +106,7 @@ cat encrypted.dat | dnca decrypt -k decryption.key
 npm install dnca
 ```
 
-### Basic Usage
+### JavaScript Usage
 
 ```javascript
 const DNCA3072 = require('dnca');
@@ -130,6 +130,37 @@ async function example() {
 
 example();
 ```
+
+### TypeScript Usage
+
+```typescript
+import DNCA3072, { MasterKey, EncryptionKey, DecryptionKey } from 'dnca';
+
+async function example(): Promise<void> {
+    const dnca = new DNCA3072();
+    
+    // Generate keys with proper typing
+    const masterKey: MasterKey = await dnca.generateMasterKey();
+    const encryptionKey: EncryptionKey = await dnca.generateEncryptionKey(masterKey);
+    const decryptionKey: DecryptionKey = await dnca.generateDecryptionKey(masterKey, encryptionKey);
+    
+    // Encrypt data
+    const encrypted: string = await dnca.encrypt("Hello World", encryptionKey);
+    
+    // Decrypt data with full type safety
+    const result = await dnca.decrypt(encrypted, decryptionKey);
+    console.log(result.plaintext); // "Hello World"
+    console.log(result.trackingInfo); // Audit information
+}
+
+example();
+```
+
+**TypeScript Features:**
+- **Full type safety**: All interfaces and types exported
+- **IntelliSense support**: IDE autocompletion and error checking
+- **Strict typing**: BigInt types for cryptographic keys
+- **Comprehensive interfaces**: `MasterKey`, `EncryptionKey`, `DecryptionKey`, `EncryptedData`, `DecryptionResult`
 
 ### Complete API Reference
 
@@ -214,12 +245,14 @@ try {
 
 ### Key Features for Developers
 
-- **TypeScript-ready**: BigInt support and proper types
-- **Memory-safe**: No key material stored in strings
+- **TypeScript-first**: Written in TypeScript with full type definitions
+- **Type safety**: Complete interfaces for all key types and operations
+- **Memory-safe**: No key material stored in strings, BigInt for crypto values
 - **Base64 encoding**: Full alphanumeric character set
-- **Authentication**: Built-in tamper detection
+- **Authentication**: Built-in tamper detection with AES-GCM
 - **Audit trail**: Comprehensive tracking information
-- **Error handling**: Clear, actionable error messages
+- **Error handling**: Clear, actionable error messages with proper typing
+- **Performance logging**: Detailed timing information for all operations
 
 ### Example Project Integration
 

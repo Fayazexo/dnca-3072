@@ -2,14 +2,22 @@
 	"name": "dnca",
 	"version": "1.0.0",
 	"description": "DNCA3072 - Dual-key encryption algorithm with AES-GCM and 3072-bit prime modulus",
-	"main": "src/dnca.js",
+	"main": "dist/src/index.js",
+	"types": "dist/src/index.d.ts",
 	"bin": {
-		"dnca": "./bin/dnca.js"
+		"dnca": "./dist/bin/dnca.js"
 	},
 	"scripts": {
-		"test": "node test/integration.js",
-		"example": "node example.js",
-		"start": "node bin/dnca.js"
+		"build": "tsc",
+		"dev": "ts-node",
+		"test": "npm run build && node dist/test/integration.js",
+		"test:dev": "ts-node test/integration.ts",
+		"example": "npm run build && node dist/example.js",
+		"example:dev": "ts-node example.ts",
+		"start": "npm run build && node dist/bin/dnca.js",
+		"start:dev": "ts-node bin/dnca.ts",
+		"prepublishOnly": "npm run build",
+		"clean": "rm -rf dist"
 	},
 	"keywords": [
 		"encryption",
@@ -29,16 +37,23 @@
 		"commander": "^11.0.0"
 	},
 	"files": [
+		"dist/",
 		"src/",
 		"bin/",
-		"README.md"
+		"README.md",
+		"tsconfig.json"
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/yourusername/dnca.git"
+		"url": "https://github.com/fayazexo/dnca.git"
 	},
 	"bugs": {
-		"url": "https://github.com/yourusername/dnca/issues"
+		"url": "https://github.com/fayazexo/dnca/issues"
 	},
-	"homepage": "https://github.com/yourusername/dnca#readme"
+	"homepage": "https://github.com/fayazexo/dnca#readme",
+	"devDependencies": {
+		"@types/node": "^24.3.0",
+		"ts-node": "^10.9.2",
+		"typescript": "^5.9.2"
+	}
 }
