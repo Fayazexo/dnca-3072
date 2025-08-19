@@ -348,3 +348,5 @@ class DNCA3072 {
 		return reconstructedKey;
 	}
 }
+
+module.exports = DNCA3072;
