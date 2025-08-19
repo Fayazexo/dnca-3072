@@ -1,43 +1,43 @@
 {
-  "name": "dnca",
-  "version": "1.0.0",
-  "description": "DNCA3072 - Dual-key encryption algorithm with AES-GCM and 3072-bit prime modulus",
-  "main": "src/dnca.js",
-  "bin": {
-    "dnca": "./bin/dnca.js"
-  },
-  "scripts": {
-    "test": "node test/test.js",
-    "start": "node bin/dnca.js"
-  },
-  "keywords": [
-    "encryption",
-    "cryptography",
-    "dual-key",
-    "aes-gcm",
-    "security",
-    "cli"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
-  "engines": {
-    "node": ">=16.0.0"
-  },
-  "dependencies": {
-    "chalk": "^4.1.2",
-    "commander": "^11.0.0"
-  },
-  "files": [
-    "src/",
-    "bin/",
-    "README.md"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yourusername/dnca.git"
-  },
-  "bugs": {
-    "url": "https://github.com/yourusername/dnca/issues"
-  },
-  "homepage": "https://github.com/yourusername/dnca#readme"
+	"name": "dnca",
+	"version": "1.0.0",
+	"description": "DNCA3072 - Dual-key encryption algorithm with AES-GCM and 3072-bit prime modulus",
+	"main": "src/dnca.js",
+	"bin": {
+		"dnca": "./bin/dnca.js"
+	},
+	"scripts": {
+		"test": "node test/test.js",
+		"start": "node bin/dnca.js"
+	},
+	"keywords": [
+		"encryption",
+		"cryptography",
+		"dual-key",
+		"aes-gcm",
+		"security",
+		"cli"
+	],
+	"author": "Fayaze H. Pantho",
+	"license": "MIT",
+	"engines": {
+		"node": ">=16.0.0"
+	},
+	"dependencies": {
+		"chalk": "^4.1.2",
+		"commander": "^11.0.0"
+	},
+	"files": [
+		"src/",
+		"bin/",
+		"README.md"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/yourusername/dnca.git"
+	},
+	"bugs": {
+		"url": "https://github.com/yourusername/dnca/issues"
+	},
+	"homepage": "https://github.com/yourusername/dnca#readme"
 }

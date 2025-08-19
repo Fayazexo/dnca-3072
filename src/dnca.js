@@ -193,32 +193,27 @@ class DNCA3072 {
 			nonce
 		);
 
-		const authData =
-			Array.from(encrypted.ciphertext)
-				.map((b) => b.toString(16).padStart(2, "0"))
-				.join("") +
-			nonce.toString(16) +
-			keyTypeFlag +
-			timestamp.toString(16);
+		const authData = Buffer.concat([
+			Buffer.from(encrypted.ciphertext),
+			Buffer.from(nonce.toString(16).padStart(32, '0').match(/.{2}/g).map(byte => parseInt(byte, 16))),
+			Buffer.from(keyTypeFlag),
+			Buffer.from(timestamp.toString(16).padStart(16, '0').match(/.{2}/g).map(byte => parseInt(byte, 16)))
+		]).toString('hex');
 		const authTag = await this.customHash(
 			authData + encryptionKey.toString(16)
 		);
 
 		const result = {
-			ciphertext: Array.from(encrypted.ciphertext)
-				.map((b) => b.toString(16).padStart(2, "0"))
-				.join(""),
-			iv: Array.from(encrypted.iv)
-				.map((b) => b.toString(16).padStart(2, "0"))
-				.join(""),
-			nonce: nonce.toString(16),
+			ciphertext: Buffer.from(encrypted.ciphertext).toString('base64'),
+			iv: Buffer.from(encrypted.iv).toString('base64'),
+			nonce: Buffer.from(nonce.toString(16).padStart(32, '0').match(/.{2}/g).map(byte => parseInt(byte, 16))).toString('base64'),
 			keyType: keyTypeFlag,
-			timestamp: timestamp.toString(16),
-			authTag: authTag.toString(16),
-			publicKey:
-				key.type === "master"
-					? key.public.toString(16)
-					: key.masterPublic.toString(16),
+			timestamp: Buffer.from(timestamp.toString(16).padStart(16, '0').match(/.{2}/g).map(byte => parseInt(byte, 16))).toString('base64'),
+			authTag: Buffer.from(authTag.toString(16).padStart(64, '0').match(/.{2}/g).map(byte => parseInt(byte, 16))).toString('base64'),
+			publicKey: Buffer.from(
+				(key.type === "master" ? key.public : key.masterPublic)
+					.toString(16).padStart(768, '0').match(/.{2}/g).map(byte => parseInt(byte, 16))
+			).toString('base64'),
 		};
 
 		return JSON.stringify(result);
@@ -242,23 +237,21 @@ class DNCA3072 {
 			decryptionKey
 		);
 
-		const authData =
-			data.ciphertext + data.nonce + data.keyType + data.timestamp;
+		const ciphertextBytes = Buffer.from(data.ciphertext, 'base64');
+		const nonceBytes = Buffer.from(data.nonce, 'base64');
+		const timestampBytes = Buffer.from(data.timestamp, 'base64');
+		const authData = Buffer.concat([ciphertextBytes, nonceBytes, Buffer.from(data.keyType), timestampBytes]).toString('hex');
 		const expectedAuthTag = await this.customHash(
 			authData + originalEncKey.toString(16)
 		);
 
-		if (expectedAuthTag.toString(16) !== data.authTag) {
+		if (expectedAuthTag.toString(16) !== Buffer.from(data.authTag, 'base64').toString('hex')) {
 			throw new Error("Authentication failed - data may be tampered");
 		}
 
-		const nonce = BigInt("0x" + data.nonce);
-		const ciphertext = new Uint8Array(
-			data.ciphertext.match(/.{2}/g).map((byte) => parseInt(byte, 16))
-		);
-		const iv = new Uint8Array(
-			data.iv.match(/.{2}/g).map((byte) => parseInt(byte, 16))
-		);
+		const nonce = BigInt('0x' + nonceBytes.toString('hex'));
+		const ciphertext = new Uint8Array(ciphertextBytes);
+		const iv = new Uint8Array(Buffer.from(data.iv, 'base64'));
 		const plaintext = await this.decryptWithAES(
 			ciphertext,
 			originalEncKey,
@@ -289,7 +282,6 @@ class DNCA3072 {
 
 		const data = JSON.parse(encryptedData);
 
-		console.log("Decryption Data:", data);
 
 		let decryptionKey;
 		if (data.keyType === "1") {
@@ -298,23 +290,21 @@ class DNCA3072 {
 			decryptionKey = await this.deriveKey(masterKey.private, "", "ENCRYPT");
 		}
 
-		const authData =
-			data.ciphertext + data.nonce + data.keyType + data.timestamp;
+		const ciphertextBytes = Buffer.from(data.ciphertext, 'base64');
+		const nonceBytes = Buffer.from(data.nonce, 'base64');
+		const timestampBytes = Buffer.from(data.timestamp, 'base64');
+		const authData = Buffer.concat([ciphertextBytes, nonceBytes, Buffer.from(data.keyType), timestampBytes]).toString('hex');
 		const expectedAuthTag = await this.customHash(
 			authData + decryptionKey.toString(16)
 		);
 
-		if (expectedAuthTag.toString(16) !== data.authTag) {
+		if (expectedAuthTag.toString(16) !== Buffer.from(data.authTag, 'base64').toString('hex')) {
 			throw new Error("Authentication failed - data may be tampered");
 		}
 
-		const nonce = BigInt("0x" + data.nonce);
-		const ciphertext = new Uint8Array(
-			data.ciphertext.match(/.{2}/g).map((byte) => parseInt(byte, 16))
-		);
-		const iv = new Uint8Array(
-			data.iv.match(/.{2}/g).map((byte) => parseInt(byte, 16))
-		);
+		const nonce = BigInt('0x' + nonceBytes.toString('hex'));
+		const ciphertext = new Uint8Array(ciphertextBytes);
+		const iv = new Uint8Array(Buffer.from(data.iv, 'base64'));
 		const plaintext = await this.decryptWithAES(
 			ciphertext,
 			decryptionKey,
