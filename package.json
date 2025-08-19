@@ -8,7 +8,8 @@
 		"dnca": "./dist/bin/dnca.js"
 	},
 	"scripts": {
-		"build": "tsc",
+		"build": "tsc && npm run fix-shebang",
+		"fix-shebang": "sed -i '' '1s|#!/usr/bin/env ts-node|#!/usr/bin/env node|' dist/bin/dnca.js",
 		"dev": "ts-node",
 		"test": "npm run build && node dist/test/integration.js",
 		"test:dev": "ts-node test/integration.ts",
