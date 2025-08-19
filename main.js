@@ -119,22 +119,56 @@ class DNCA3072 {
 		return result;
 	}
 
-	xorWithKey(data, key, nonce) {
-		const combined = key + nonce;
-		const keyStream = combined.toString(16);
-		const result = [];
+	async deriveAESKey(key, nonce) {
+		const keyMaterial = key.toString(16) + nonce.toString(16);
+		const keyHash = await this.customHash(keyMaterial);
+		const keyBytes = new Uint8Array(32);
 
-		for (let i = 0; i < data.length; i++) {
-			const keyByte =
-				parseInt(
-					keyStream.charAt(i % keyStream.length) +
-						keyStream.charAt((i + 1) % keyStream.length),
-					16
-				) || 1;
-			result.push(data.charCodeAt(i) ^ keyByte);
+		const keyHex = keyHash.toString(16).padStart(64, "0");
+		for (let i = 0; i < 32; i++) {
+			keyBytes[i] = parseInt(keyHex.substring(i * 2, i * 2 + 2), 16);
 		}
 
-		return String.fromCharCode(...result);
+		return await crypto.subtle.importKey(
+			"raw",
+			keyBytes,
+			{ name: "AES-GCM" },
+			false,
+			["encrypt", "decrypt"]
+		);
+	}
+
+	async encryptWithAES(plaintext, key, nonce) {
+		const aesKey = await this.deriveAESKey(key, nonce);
+		const encoder = new TextEncoder();
+		const data = encoder.encode(plaintext);
+
+		const iv = new Uint8Array(12);
+		crypto.getRandomValues(iv);
+
+		const encrypted = await crypto.subtle.encrypt(
+			{ name: "AES-GCM", iv: iv },
+			aesKey,
+			data
+		);
+
+		return {
+			ciphertext: new Uint8Array(encrypted),
+			iv: iv,
+		};
+	}
+
+	async decryptWithAES(ciphertext, key, nonce, iv) {
+		const aesKey = await this.deriveAESKey(key, nonce);
+
+		const decrypted = await crypto.subtle.decrypt(
+			{ name: "AES-GCM", iv: iv },
+			aesKey,
+			ciphertext
+		);
+
+		const decoder = new TextDecoder();
+		return decoder.decode(decrypted);
 	}
 
 	async encrypt(plaintext, key) {
@@ -153,16 +187,30 @@ class DNCA3072 {
 			throw new Error("Invalid key type for encryption");
 		}
 
-		const ciphertext = this.xorWithKey(plaintext, encryptionKey, nonce);
+		const encrypted = await this.encryptWithAES(
+			plaintext,
+			encryptionKey,
+			nonce
+		);
 
 		const authData =
-			ciphertext + nonce.toString(16) + keyTypeFlag + timestamp.toString(16);
+			Array.from(encrypted.ciphertext)
+				.map((b) => b.toString(16).padStart(2, "0"))
+				.join("") +
+			nonce.toString(16) +
+			keyTypeFlag +
+			timestamp.toString(16);
 		const authTag = await this.customHash(
 			authData + encryptionKey.toString(16)
 		);
 
 		const result = {
-			ciphertext: btoa(ciphertext),
+			ciphertext: Array.from(encrypted.ciphertext)
+				.map((b) => b.toString(16).padStart(2, "0"))
+				.join(""),
+			iv: Array.from(encrypted.iv)
+				.map((b) => b.toString(16).padStart(2, "0"))
+				.join(""),
 			nonce: nonce.toString(16),
 			keyType: keyTypeFlag,
 			timestamp: timestamp.toString(16),
@@ -195,7 +243,7 @@ class DNCA3072 {
 		);
 
 		const authData =
-			atob(data.ciphertext) + data.nonce + data.keyType + data.timestamp;
+			data.ciphertext + data.nonce + data.keyType + data.timestamp;
 		const expectedAuthTag = await this.customHash(
 			authData + originalEncKey.toString(16)
 		);
@@ -205,10 +253,17 @@ class DNCA3072 {
 		}
 
 		const nonce = BigInt("0x" + data.nonce);
-		const plaintext = this.xorWithKey(
-			atob(data.ciphertext),
+		const ciphertext = new Uint8Array(
+			data.ciphertext.match(/.{2}/g).map((byte) => parseInt(byte, 16))
+		);
+		const iv = new Uint8Array(
+			data.iv.match(/.{2}/g).map((byte) => parseInt(byte, 16))
+		);
+		const plaintext = await this.decryptWithAES(
+			ciphertext,
 			originalEncKey,
-			nonce
+			nonce,
+			iv
 		);
 
 		console.log("Decryption Time:", performance.now() - time, "ms");
@@ -244,7 +299,7 @@ class DNCA3072 {
 		}
 
 		const authData =
-			atob(data.ciphertext) + data.nonce + data.keyType + data.timestamp;
+			data.ciphertext + data.nonce + data.keyType + data.timestamp;
 		const expectedAuthTag = await this.customHash(
 			authData + decryptionKey.toString(16)
 		);
@@ -254,10 +309,17 @@ class DNCA3072 {
 		}
 
 		const nonce = BigInt("0x" + data.nonce);
-		const plaintext = this.xorWithKey(
-			atob(data.ciphertext),
+		const ciphertext = new Uint8Array(
+			data.ciphertext.match(/.{2}/g).map((byte) => parseInt(byte, 16))
+		);
+		const iv = new Uint8Array(
+			data.iv.match(/.{2}/g).map((byte) => parseInt(byte, 16))
+		);
+		const plaintext = await this.decryptWithAES(
+			ciphertext,
 			decryptionKey,
-			nonce
+			nonce,
+			iv
 		);
 		console.log("Decryption Time:", performance.now() - time, "ms");
 
@@ -275,7 +337,14 @@ class DNCA3072 {
 	}
 
 	async deriveOriginalEncryptionKey(decryptionKey) {
-		const keyIdHash = await this.customHash(decryptionKey.keyId);
-		return (decryptionKey.key - keyIdHash) % this.PRIME;
+		const masterKeyHash = await this.customHash(
+			decryptionKey.encryptionKeyHash.toString()
+		);
+		const reconstructedKey = await this.deriveKey(
+			masterKeyHash,
+			decryptionKey.keyId,
+			"ENCRYPT"
+		);
+		return reconstructedKey;
 	}
 }
