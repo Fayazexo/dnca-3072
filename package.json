@@ -13,8 +13,6 @@
 		"dev": "ts-node",
 		"test": "npm run build && node dist/test/integration.js",
 		"test:dev": "ts-node test/integration.ts",
-		"example": "npm run build && node dist/example.js",
-		"example:dev": "ts-node example.ts",
 		"start": "npm run build && node dist/bin/dnca.js",
 		"start:dev": "ts-node bin/dnca.ts",
 		"prepublishOnly": "npm run build",
