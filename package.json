@@ -1,6 +1,6 @@
 {
 	"name": "dnca",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "DNCA3072 - Dual-key encryption algorithm with AES-GCM and 3072-bit prime modulus",
 	"main": "dist/src/index.js",
 	"types": "dist/src/index.d.ts",
@@ -44,12 +44,12 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/fayazexo/dnca.git"
+		"url": "https://github.com/fayazexo/dnca-3072.git"
 	},
 	"bugs": {
-		"url": "https://github.com/fayazexo/dnca/issues"
+		"url": "https://github.com/fayazexo/dnca-3072/issues"
 	},
-	"homepage": "https://github.com/fayazexo/dnca#readme",
+	"homepage": "https://github.com/fayazexo/dnca-3072#readme",
 	"devDependencies": {
 		"@types/node": "^24.3.0",
 		"ts-node": "^10.9.2",
